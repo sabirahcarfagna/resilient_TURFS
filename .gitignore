@@ -47,3 +47,11 @@ po/*~
 
 # RStudio Connect folder
 rsconnect/
+
+# Large or generated data
+data/raw/
+data/processed/sdm_rasters/
+data/eez_v12.gpkg
+
+# R workspace files
+**/.RData
