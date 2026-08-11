@@ -55,3 +55,7 @@ data/eez_v12.gpkg
 
 # R workspace files
 **/.RData
+# Local R workspaces and large data files
+.RData
+data/eez_v12.gpkg
+data/raw/

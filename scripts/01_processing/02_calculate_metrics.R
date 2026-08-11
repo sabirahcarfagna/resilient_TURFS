@@ -305,3 +305,15 @@ all_metrics <- lapply(
   process_raster_metrics
 )
 
+# SAVE OUTPUT TABLES ----------------------------------------------------------
+
+readr::write_csv(
+  all_metrics_combined,
+  "data/processed/turf_metrics/turf_species_metrics.csv"
+)
+
+readr::write_csv(
+  species_richness,
+  "data/processed/turf_metrics/turf_species_richness.csv"
+)
+
