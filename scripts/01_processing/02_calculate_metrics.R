@@ -36,6 +36,8 @@ library(dplyr)
 # folder containing processed SDM rasters
 raster_folder <- "data/processed/sdm_rasters"
 
+cutoff_file <- "data/processed/sdm_cutoffs.csv"
+
 # file of cleaned ere TURFs and species 
 turf_file <- "data/turfs/mex_turfs_combined.gpkg"
 
@@ -47,6 +49,12 @@ metrics_output_file <- "data/processed/turf_metrics.csv"
 # Load  cleaned TURF polygons and species info
 turfs <- st_read(turf_file)
 
+# Load species-specific AquaX suitability thresholds
+
+species_cutoffs <- readr::read_csv(
+  cutoff_file,
+  show_col_types = FALSE
+)
 # LIST RASTERS -----------------------------------------------------------------
 
 raster_files <- list.files(
@@ -95,6 +103,18 @@ get_species_turfs <- function(target_aphia_id) {
   
 }
 
+# FUNCTION: get_species_cutoff -----------------------------------------------
+
+get_species_cutoff <- function(target_aphia_id) {
+  
+  species_cutoffs |>
+    dplyr::filter(
+      as.character(aphia_id) == target_aphia_id
+    ) |>
+    dplyr::pull(cutoff)
+  
+}
+
 # FUNCTION: load_matching_raster_data -----------------------------------------
 #prepares everything needed for the calculations
 #converts the coordinates 
@@ -104,6 +124,8 @@ get_species_turfs <- function(target_aphia_id) {
 load_matching_raster_data <- function(file) {
   
   aphia_id <- get_raster_aphia_id(file)
+  
+  cutoff <- get_species_cutoff(aphia_id)
   
   scenario <- get_raster_scenario(file)
   
@@ -162,6 +184,7 @@ load_matching_raster_data <- function(file) {
       scenario = scenario,
       raster = raster,
       species_turfs = species_turfs,
+      cutoff = cutoff,
       extracted_values = extracted_values
     )
   )
@@ -170,7 +193,7 @@ load_matching_raster_data <- function(file) {
 
 # FUNCTION: calculate_mean_hsi -----------------------------------------------
 
-calculate_mean_hsi <- function(extracted_values) {
+calculate_mean_hsi <- function(extracted_values, cutoff) {
   
   # Create one row per TURF so that TURFs with
   # no suitable cells are still kept in the final output
@@ -184,7 +207,7 @@ calculate_mean_hsi <- function(extracted_values) {
   # Keep only cells above the suitability threshold
   mean_hsi <- extracted_values |>
     dplyr::filter(
-      hsi > 500 #maybe we'll divide everything by 1000
+      hsi > cutoff 
     ) |>
     # Group the cells by TURF and species
     dplyr::group_by(
@@ -211,7 +234,7 @@ calculate_mean_hsi <- function(extracted_values) {
 
 # FUNCTION: calculate_percent_suitable ---------------------------------------
 
-calculate_percent_suitable <- function(extracted_values) {
+calculate_percent_suitable <- function(extracted_values, cutoff) {
   
   extracted_values |>
     dplyr::group_by(
@@ -224,10 +247,21 @@ calculate_percent_suitable <- function(extracted_values) {
       # with valid habitat suitability values
       percent_suitable =
         100 *
-        sum(hsi > 500, na.rm = TRUE) /
+        sum(hsi > cutoff, na.rm = TRUE) /
         sum(!is.na(hsi)),
       
       .groups = "drop"
+    )
+  
+}
+
+# FUNCTION: calculate_species_presence ----------------------------------------
+
+calculate_species_presence <- function(percent_suitable) {
+  
+  percent_suitable |>
+    dplyr::mutate(
+      present = percent_suitable > 10
     )
   
 }
@@ -250,6 +284,7 @@ calculate_species_richness <- function(species_presence) {
 }
 
 # FUNCTION: process_raster_metrics --------------------------------------------
+
 # Process one species-scenario raster from start to finish 
 # and calculate habitat suitability metrics 
 # for all TURFs that target that species
@@ -265,12 +300,14 @@ process_raster_metrics <- function(file) {
   
   #calculate mean HSI
   mean_hsi <- calculate_mean_hsi(
-    data$extracted_values
+    data$extracted_values,
+    data$cutoff
   )
   
   #caluclate percent of suitable habitat
   percent_suitable <- calculate_percent_suitable(
-    data$extracted_values
+    data$extracted_values,
+    data$cutoff
   )
   
   #combine the two metrics tables
@@ -303,6 +340,17 @@ process_raster_metrics <- function(file) {
 all_metrics <- lapply(
   raster_files,
   process_raster_metrics
+)
+# COMBINE ALL RASTER METRICS --------------------------------------------------
+
+all_metrics_combined <- dplyr::bind_rows(
+  all_metrics
+)
+
+# CALCULATE SPECIES RICHNESS --------------------------------------------------
+
+species_richness <- calculate_species_richness(
+  all_metrics_combined
 )
 
 # SAVE OUTPUT TABLES ----------------------------------------------------------
