@@ -20,6 +20,7 @@ mexico_eez_file <- "data/eez_v12.gpkg"
 #where rasters will be saved
 raster_output_folder <- "data/processed/sdm_rasters"
 
+cutoff_output_file <- "data/processed/sdm_cutoffs.csv"
 # LOAD MEXICO EEZ --------------------------------------------------------------
 
 #GOAL:
@@ -145,6 +146,8 @@ process_species <- function(file) {
   
   sdm <- load_species_sdm(file) #loads file, renames cols and returns it as sdm
   
+  cutoff <- unique(sdm$cutoff)
+  
   scenarios <- c( #create list of scenarios 
     "current",
     "rcp26_2050",
@@ -174,19 +177,36 @@ process_species <- function(file) {
       ".tif"
     )
     
-    save_scenario_raster( #save it to outout folder
+    save_scenario_raster(
       mexico_raster,
       filename
     )
     
-  } 
+  }
+  
+  return(
+    data.frame(
+      aphia_id = aphia_id,
+      cutoff = cutoff
+    )
+  )
   
 }
 
-# PROCESS ALL SPECIES ----------------------------------------------------------
-
-for (file in sdm_files) { #now loop over species 
+  # PROCESS ALL SPECIES ----------------------------------------------------------
   
-  process_species(file)
+  species_cutoffs <- lapply(
+    sdm_files,
+    process_species
+  )
   
-}
+  species_cutoffs <- dplyr::bind_rows(
+    species_cutoffs
+  )
+  
+  readr::write_csv(
+    species_cutoffs,
+    cutoff_output_file
+  )
+  
+  
