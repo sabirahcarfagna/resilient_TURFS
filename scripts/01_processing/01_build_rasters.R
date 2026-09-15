@@ -79,13 +79,8 @@ load_species_sdm <- function(file) { #function(input)
   rm(FINALEMMEAN) #remove finalemmean from env. 
   
   #renaming all variables to lowercase
-  names(sdm)[names(sdm) == "Current"] <- "current"
-  names(sdm)[names(sdm) == "RCP26_2050"] <- "rcp26_2050"
-  names(sdm)[names(sdm) == "RCP26_2100"] <- "rcp26_2100"
-  names(sdm)[names(sdm) == "RCP45_2050"] <- "rcp45_2050"
-  names(sdm)[names(sdm) == "RCP45_2100"] <- "rcp45_2100"
-  names(sdm)[names(sdm) == "RCP85_2050"] <- "rcp85_2050"
-  names(sdm)[names(sdm) == "RCP85_2100"] <- "rcp85_2100"
+  # standardize variable names
+  sdm <- janitor::clean_names(sdm)
   
   return(sdm)
 }
@@ -113,13 +108,15 @@ crop_to_eez <- function(raster, eez) {
   
   eez_vector <- vect(eez)
   
-  cropped_raster <- crop(raster, eez_vector)
+  cropped_raster <- crop(
+    raster,
+    eez_vector,
+    extend = TRUE #added extend = T
+  )
   
-  masked_raster <- mask(cropped_raster, eez_vector)
+  return(cropped_raster)
   
-  return(masked_raster)
-  
-}
+} #removed mask
 
 # FUNCTION: save_scenario_raster -----------------------------------------------
 

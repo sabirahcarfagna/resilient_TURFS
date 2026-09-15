@@ -3,7 +3,7 @@
 # This script calculates habitat-suitability metrics for target species
 # within Mexican TURFs.
 #
-# 1. Helper functions identify the species and scenario represented by each
+# 1. "Helper" functions identify the species and scenario represented by each
 #    raster and find the TURFs that target that species.
 #
 # 2. Metric functions calculate, for each TURF x species x scenario:
@@ -49,12 +49,12 @@ metrics_output_file <- "data/processed/turf_metrics.csv"
 # Load  cleaned TURF polygons and species info
 turfs <- st_read(turf_file)
 
-# Load species-specific AquaX suitability thresholds
-
+# Load species-specific AquaX HSI cutoffs
 species_cutoffs <- readr::read_csv(
   cutoff_file,
   show_col_types = FALSE
 )
+
 # LIST RASTERS -----------------------------------------------------------------
 
 raster_files <- list.files(
