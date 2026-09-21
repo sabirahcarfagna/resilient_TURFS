@@ -103,6 +103,57 @@ get_species_turfs <- function(target_aphia_id) {
   
 }
 
+# FUNCTION: get_modeled_turf_areas --------------------------------------------
+# Creates one unique polygon for each spatial sub-ID included
+# in the existing AquaX analysis.
+#
+# Unlike get_species_turfs(), these polygons are NOT filtered
+# according to which species the TURF currently targets.
+#
+# These areas will later be used to evaluate every modeled
+# AquaX species inside every modeled sub-ID.
+
+get_modeled_turf_areas <- function() {
+  
+  # Aphia IDs for which we actually have AquaX rasters
+  modeled_aphia_ids <- unique(
+    vapply(
+      raster_files,
+      get_raster_aphia_id,
+      character(1)
+    )
+  )
+  
+  # Identify the sub-IDs already represented in the
+  # target-species AquaX analysis
+  modeled_sub_ids <- turfs |>
+    st_drop_geometry() |>
+    dplyr::filter(
+      as.character(aphia_id) %in% modeled_aphia_ids
+    ) |>
+    dplyr::distinct(sub_id) |>
+    dplyr::pull(sub_id)
+  
+  # Keep one spatial geometry per modeled sub-ID.
+  #
+  # A sub-ID can occur on multiple rows because it can target
+  # multiple species, so we group and union its geometry.
+  modeled_turf_areas <- turfs |>
+    dplyr::filter(
+      sub_id %in% modeled_sub_ids
+    ) |>
+    dplyr::group_by(
+      sub_id
+    ) |>
+    dplyr::summarise(
+      turf_id = dplyr::first(turf_id),
+      .groups = "drop"
+    )
+  
+  return(modeled_turf_areas)
+  
+}
+
 # FUNCTION: get_species_cutoff -----------------------------------------------
 
 get_species_cutoff <- function(target_aphia_id) {
@@ -191,45 +242,123 @@ load_matching_raster_data <- function(file) {
   
 }
 
+# FUNCTION: load_all_turf_raster_data -----------------------------------------
+# Prepares one species x scenario raster for ALL modeled TURF areas,
+# regardless of whether each TURF currently targets that species.
+#
+# Allows to detect potential suitable habitat for species
+# that are not currently targeted by a TURF.
+
+load_all_turf_raster_data <- function(file) {
+  
+  aphia_id <- get_raster_aphia_id(file)
+  
+  cutoff <- get_species_cutoff(aphia_id)
+  
+  scenario <- get_raster_scenario(file)
+  
+  raster <- rast(file)
+  
+  # Use all 36 modeled spatial sub-IDs rather than only
+  # the TURFs that currently target this species
+  all_turfs <- get_modeled_turf_areas()
+  
+  # Transform TURFs to match raster CRS
+  all_turfs <- st_transform(
+    all_turfs,
+    crs = crs(raster)
+  )
+  
+  # Extract HSI values from this species raster
+  # within every modeled TURF area
+  extracted_values <- terra::extract(
+    raster,
+    terra::vect(all_turfs)
+  )
+  
+  # Give raster-value column a consistent name
+  names(extracted_values)[2] <- "hsi"
+  
+  # Create lookup table connecting terra extraction IDs
+  # back to the correct spatial sub-ID
+  turf_lookup <- all_turfs |>
+    st_drop_geometry() |>
+    dplyr::mutate(
+      ID = dplyr::row_number()
+    ) |>
+    dplyr::select(
+      ID,
+      sub_id,
+      turf_id
+    )
+  
+  extracted_values <- extracted_values |>
+    dplyr::left_join(
+      turf_lookup,
+      by = "ID"
+    ) |>
+    dplyr::mutate(
+      aphia_id = aphia_id
+    )
+  
+  return(
+    list(
+      aphia_id = aphia_id,
+      scenario = scenario,
+      raster = raster,
+      all_turfs = all_turfs,
+      cutoff = cutoff,
+      extracted_values = extracted_values
+    )
+  )
+  
+}
+
 # FUNCTION: calculate_mean_hsi -----------------------------------------------
 
 calculate_mean_hsi <- function(extracted_values, cutoff) {
   
-  # Create one row per TURF so that TURFs with
-  # no suitable cells are still kept in the final output
-  all_turfs <- extracted_values |>
-    dplyr::distinct(
-      sub_id,
-      turf_id,
-      aphia_id
-    )
-  
-  # Keep only cells above the suitability threshold
-  mean_hsi <- extracted_values |>
-    dplyr::filter(
-      hsi > cutoff 
-    ) |>
-    # Group the cells by TURF and species
+  extracted_values |>
     dplyr::group_by(
       sub_id,
       turf_id,
       aphia_id
     ) |>
-    # Calculate average HSI of suitable cells
-    # within each TURF, ignoring missing values
     dplyr::summarise(
-      mean_hsi = mean(hsi, na.rm = TRUE),
+      
+      # Number of cells with an AquaX HSI prediction
+      n_valid_cells = sum(!is.na(hsi)),
+      
+      # Mean HSI of suitable cells
+      mean_hsi = {
+        
+        if (n_valid_cells == 0) {
+          
+          # No numeric AquaX prediction is available
+          NA_real_
+          
+        } else if (sum(hsi > cutoff, na.rm = TRUE) == 0) {
+          
+          # AquaX predictions exist, but no cells are suitable
+          0
+          
+        } else {
+          
+          # At least one suitable cell exists
+          mean(
+            hsi[hsi > cutoff],
+            na.rm = TRUE
+          )
+          
+        }
+        
+      },
+      
       .groups = "drop"
+    ) |>
+    dplyr::select(
+      -n_valid_cells
     )
-  # Join calculated means back to the full TURF list
-  # so TURFs with no suitable habitat remain as NA 
-  # instead of disappearing
-  all_turfs |>
-    dplyr::left_join(
-      mean_hsi,
-      by = c("sub_id", "turf_id", "aphia_id")
-    )
-  
 }
 
 # FUNCTION: calculate_percent_suitable ---------------------------------------
@@ -243,16 +372,30 @@ calculate_percent_suitable <- function(extracted_values, cutoff) {
       aphia_id
     ) |>
     dplyr::summarise(
-      # Count total number of cells
-      # with valid habitat suitability values
-      percent_suitable =
-        100 *
-        sum(hsi > cutoff, na.rm = TRUE) /
-        sum(!is.na(hsi)),
+      
+      n_valid_cells = sum(!is.na(hsi)),
+      
+      percent_suitable = {
+        
+        if (n_valid_cells == 0) {
+          
+          NA_real_
+          
+        } else {
+          
+          100 *
+            sum(hsi > cutoff, na.rm = TRUE) /
+            n_valid_cells
+          
+        }
+        
+      },
       
       .groups = "drop"
+    ) |>
+    dplyr::select(
+      -n_valid_cells
     )
-  
 }
 
 # FUNCTION: calculate_species_presence ----------------------------------------
@@ -261,7 +404,7 @@ calculate_species_presence <- function(percent_suitable) {
   
   percent_suitable |>
     dplyr::mutate(
-      present = percent_suitable > 10
+      present = percent_suitable > 0
     )
   
 }
@@ -335,6 +478,40 @@ process_raster_metrics <- function(file) {
   
 }
 
+# FUNCTION: process_all_turf_metrics ------------------------------------------
+# Process one species-scenario raster across ALL modeled TURF areas,
+# regardless of whether each TURF currently targets that species.
+#
+# This produces percent suitable habitat for every
+# modeled TURF x modeled species x scenario combination.
+
+process_all_turf_metrics <- function(file) {
+  
+  # Prepare this species raster for all 36 modeled TURFs
+  data <- load_all_turf_raster_data(file)
+  
+  # Calculate percent suitable habitat
+  percent_suitable <- calculate_percent_suitable(
+    data$extracted_values,
+    data$cutoff
+  )
+  
+  # Classify species as having suitable habitat
+  # whenever percent suitable > 0
+  metrics <- calculate_species_presence(
+    percent_suitable
+  )
+  
+  # Add scenario
+  metrics <- metrics |>
+    dplyr::mutate(
+      scenario = data$scenario
+    )
+  
+  return(metrics)
+  
+}
+
 # PROCESS ALL RASTERS ----------------------------------------------------------
 
 all_metrics <- lapply(
@@ -351,6 +528,22 @@ all_metrics_combined <- dplyr::bind_rows(
 
 species_richness <- calculate_species_richness(
   all_metrics_combined
+)
+
+# CALCULATE POTENTIAL SPECIES REDISTRIBUTION ---------------------------------
+#
+# Evaluate every modeled AquaX species within every modeled TURF sub-ID,
+# regardless of whether that species is currently targeted there.
+#
+# 36 sub-IDs x 20 modeled species x 7 scenarios = 5,040 observations.
+
+potential_metrics <- lapply(
+  raster_files,
+  process_all_turf_metrics
+)
+
+potential_metrics_combined <- dplyr::bind_rows(
+  potential_metrics
 )
 
 # SAVE OUTPUT TABLES ----------------------------------------------------------
