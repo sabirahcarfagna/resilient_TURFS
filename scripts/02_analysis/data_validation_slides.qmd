@@ -1,0 +1,1012 @@
+---
+title: "TURF Data Validation"
+format:
+  revealjs:
+    transition: none
+    width: 1050
+    height: 700
+    margin: 0.1
+    slide-number: true
+execute:
+  echo: false
+  warning: false
+editor: source
+---
+
+```{r}
+#| include: false
+
+setwd("../..")
+
+validation <- readRDS(
+  "data/processed/turf_metrics/data_validation_objects.rds"
+)
+
+list2env(validation, envir = .GlobalEnv)
+```
+
+## how are the TURFs structured?
+
+:::::: structure-slide
+The dataset contains **169 TURF IDs** but **212 spatial sub-IDs**
+
+::::: structure-columns
+::: structure-column
+**Most are simple**
+
+165 TURF IDs → **1 sub-ID**
+:::
+
+::: structure-column
+**A few contain multiple spatial areas**
+
+MX_C_012 → **2 sub-IDs**\
+MX_C_002 → **3 sub-IDs**\
+MX_C_052 → **5 sub-IDs**\
+MX_C_007 → **20 sub-IDs**
+:::
+:::::
+
+<br>
+
+[**→ I use sub-IDs because each sub-ID represents a separate spatial area.**]{.blue}
+::::::
+
+## which TURFs are included?
+
+:::::::: included-slide
+
+::: flow-row
+[212]{.flow-number} <strong>TURF sub-IDs</strong>
+:::
+
+::: down-arrow
+↓
+:::
+
+::: flow-row
+[198]{.flow-number} <strong>have identified species</strong>
+:::
+
+::: flow-note
+14 have no species information
+:::
+
+::: down-arrow
+↓
+:::
+
+::: estuary-row
+::: flow-row
+[54]{.flow-number} <strong>have marine (non-estuarine) species</strong>
+:::
+
+::: flow-note
+<em>Penaeus</em> + <em>Callinectes</em>
+:::
+:::
+
+::: down-arrow
+↓
+:::
+
+::: flow-row
+[36]{.flow-number} <strong>have species with SDMs</strong>
+:::
+
+::::::::
+
+## what is missing from AquaX?
+
+::::::: filter-slide
+
+Of the **198 sub-IDs with identified species**, only **36** contain a species with one of our processed SDMs.
+
+:::::: species-columns
+
+::: species-column
+**Not in AquaX database**
+
+*Gelidium*\
+*Gelidium robustum*\
+<span style="color:#d98989;"><em>Penaeus aztecus</em></span>\
+<span style="color:#d98989;"><em>Penaeus vannamei</em></span>\
+<span style="color:#d98989;"><em>Penaeus</em> spp.</span>\
+<span style="color:#d98989;"><em>Callinectes</em> spp.</span>
+:::
+
+::: species-column
+**In AquaX, but no SDM available**
+
+*Anadara tuberculosa*\
+<span style="color:#d98989;"><em>Callinectes rathbunae</em></span>\
+<span style="color:#d98989;"><em>Penaeus stylirostris</em></span>\
+*Tivela stultorum*
+:::
+
+::: species-column
+**SDM potentially available**
+
+*Octopus vulgaris*
+:::
+
+::::::
+
+:::::::
+
+## what do the 36 TURFs include?
+
+::::::: modeled-species-slide
+**36 TURF sub-IDs** cover [**20 species with SDMs**]{.blue}
+
+:::::: species-columns
+::: species-column
+**Lobsters**
+
+*Panulirus argus*\
+*P. gracilis*\
+*P. inflatus*\
+*P. interruptus*\
+*P. penicillatus*
+
+**Sea urchins**
+
+*Mesocentrotus franciscanus*\
+*Strongylocentrotus purpuratus*
+:::
+
+::: species-column
+**Abalone**
+
+*Haliotis corrugata*\
+*H. cracherodii*\
+*H. fulgens*\
+*H. rufescens*\
+*H. sorenseni*
+
+**Oysters**
+
+*Crassostrea virginica*\
+*Striostrea prismatica*
+:::
+
+::: species-column
+**Sea cucumbers**
+
+*Apostichopus parvimensis*\
+*Holothuria inhabilis*\
+*H. impatiens*
+
+**Other**
+
+*Megastraea undosa*\
+*Melongena patula*\
+*Cardisoma guanhumi*
+:::
+::::::
+:::::::
+
+## where are the 36 modeled sub-IDs?
+
+:::::: map-slide
+
+```{r}
+#| echo: false
+#| warning: false
+#| message: false
+#| fig-width: 10
+#| fig-height: 5.4
+#| out-width: "100%"
+#| fig-align: center
+
+modeled_turfs_plot
+```
+
+::::::
+
+
+## how many AquaX cells support each observation?
+
+:::::: cell-support-slide
+
+<div class="cell-support-intro">
+
+Each observation = **1 sub-ID × 1 species × 1 scenario**  
+**749 observations total**
+
+</div>
+
+```{r}
+#| echo: false
+#| warning: false
+#| message: false
+#| fig-width: 9
+#| fig-height: 3.7
+#| out-width: "72%"
+#| fig-align: center
+
+cell_support_plot
+```
+
+<div class="cell-support-takeaway">
+
+**222 of 749 observations (29.6%)** have ≤3 HSI-valued cells.  
+Of these, **52 observations (6.9%)** have **only NA-valued cells**.
+
+</div>
+
+::::::
+## what did we find about AquaX NAs?
+
+:::::: na-slide
+
+### 1. some sub-IDs have no AquaX data
+
+**5 sub-IDs** are completely NA for ≥1 species  
+*Crassostrea virginica · Strongylocentrotus purpuratus · Mesocentrotus franciscanus*
+
+*→ all NA from current through 2100*
+
+### 2. two cases actually lose their data
+
+**2 sub-ID × species combinations** become NA in future scenarios  
+*S. purpuratus*
+
+→ all NA after RCP2.6 2050
+
+### 3. partial NAs are widespread, but stable
+
+**45 sub-ID × species combinations**
+
+Same number of NA cells across **all scenarios and time periods**
+
+`→ If NA = no prediction: partial NAs are less concerning because they are stable and excluded from calculations; all-NA cases cannot be used to calculate metrics or interpreted as habitat absence.`
+
+::::::
+
+## MEAN HSI · DATA CHECK 
+
+<div class="mean-hsi-na-slide">
+
+### **107 observations currently have mean HSI = NA**
+
+<br>
+
+**55 observations** have HSI-valued cells, but **no cells above the suitability cutoff**
+
+`→ No suitable habitat → mean HSI = 0`
+
+<br>
+
+**52 observations** have **only NA-valued cells**
+
+`→ Mean HSI cannot be calculated → remains NA`
+
+<br>
+
+<div class="metric-check-takeaway">
+
+**→ We need to distinguish absence of suitable habitat (0) from absence of an AquaX prediction (NA).**
+
+</div>
+
+</div>
+
+## MEAN HSI · WHERE ARE THE 55 ZERO-SUITABILITY CASES?
+
+<div class="mean-hsi-attention-slide">
+
+```{r}
+#| echo: false
+#| fig-width: 11
+#| fig-height: 5.2
+#| out-width: "92%"
+#| fig-align: center
+
+mean_hsi_zero_map
+```
+
+<div class="attention-takeaway">
+
+**→ These represent no suitable habitat and should have mean HSI = 0, rather than NA.**
+
+</div>
+
+</div>
+
+## MEAN HSI · WHERE ARE THE 52 NA CASES
+
+<div class="mean-hsi-attention-slide">
+
+<div class="attention-map-columns">
+
+<div class="attention-map">
+
+**Baja California**
+
+```{r}
+#| echo: false
+#| warning: false
+#| message: false
+#| fig-width: 5
+#| fig-height: 4.5
+#| out-width: "100%"
+
+mean_hsi_attention_bc_plot
+```
+
+</div>
+
+<div class="attention-map">
+
+**Veracruz**
+
+```{r}
+#| echo: false
+#| warning: false
+#| message: false
+#| fig-width: 5
+#| fig-height: 4.5
+#| out-width: "100%"
+
+mean_hsi_attention_ver_plot
+```
+
+</div>
+
+</div>
+
+<div class="attention-legend">
+
+<span class="legend-item">
+<span class="legend-box permanent-na"></span>
+**All NA in every scenario**
+</span>
+
+<span class="legend-item">
+<span class="legend-box future-na"></span>
+**Becomes all NA in some scenarios**
+</span>
+
+<span class="legend-item">
+<span class="legend-box no-issue"></span>
+Other modeled sub-IDs
+</span>
+
+</div>
+
+</div>
+
+## MEAN HSI · CLIMATE RESPONSE
+
+:::::: mean-hsi-na-slide
+
+```{r}
+#| echo: false
+#| warning: false
+#| message: false
+#| fig-width: 10
+#| fig-height: 4.5
+#| out-width: "70%"
+#| fig-align: center
+
+mean_hsi_climate_plot
+```
+
+<div class="percent-bottom-text">
+
+Average mean HSI declines from **830 under current conditions** to **753 under RCP8.5 2100**.
+
+**RCP8.5 2100** has lowest average mean HSI..
+
+</div>
+
+::::::
+
+## % SUITABLE HABITAT · DATA CHECK
+
+:::::: percent-suitable-slide
+
+### **697 of 749 observations have HSI-valued cells**
+
+<br>
+
+**All 697 independently reproduce the calculated % suitable**
+
+`→ No calculation errors found`
+
+<br>
+
+**170 observations are calculated from only 1–3 HSI-valued cells**
+
+`→ 1 cell: 0% or 100%`
+
+`→ 2 cells: 0%, 50%, or 100%`
+
+`→ 3 cells: 0%, 33.3%, 66.7%, or 100%`
+
+<br>
+
+**52 observations have no HSI-valued cells**
+
+`→ % suitable cannot be calculated → remains NA`
+
+<div class="metric-check-takeaway">
+
+**→ The calculation is correct, but some % suitable estimates have very coarse spatial support.**
+
+</div>
+
+::::::
+
+
+## % SUITABLE HABITAT · WHERE ARE THESE CASES?
+
+<div class="mean-hsi-attention-slide percent-attention-slide">
+
+<div class="attention-map-columns percent-map-columns">
+
+<div class="attention-map">
+
+```{r}
+#| echo: false
+#| warning: false
+#| message: false
+#| fig-width: 7
+#| fig-height: 5
+
+percent_suitable_attention_west_plot
+```
+
+</div>
+
+<div class="attention-map">
+
+```{r}
+#| echo: false
+#| warning: false
+#| message: false
+#| fig-width: 7
+#| fig-height: 5
+
+percent_suitable_attention_ver_plot
+```
+
+</div>
+
+</div>
+
+<div class="attention-legend">
+
+<span class="legend-item">
+<span class="legend-box zero-cells"></span>
+**0 HSI-valued cells**
+</span>
+
+<span class="legend-item">
+<span class="legend-box one-cell"></span>
+**1 cell**
+</span>
+
+<span class="legend-item">
+<span class="legend-box two-three-cells"></span>
+**2–3 cells**
+</span>
+
+<span class="legend-item">
+<span class="legend-box transition-cells"></span>
+**2 cells → 0 cells**
+</span>
+
+<span class="legend-item">
+<span class="legend-box no-issue"></span>
+Other modeled sub-IDs
+</span>
+
+</div>
+
+<div class="attention-takeaway">
+
+**→ These sub-IDs need extra attention because % suitable is either unavailable or based on very few HSI-valued cells.**
+
+</div>
+
+</div>
+
+## % SUITABLE HABITAT · CLIMATE RESPONSE
+
+<div class="percent-suitable-slide" data-auto-animate="false">
+
+```{r}
+#| echo: false
+#| warning: false
+#| message: false
+#| fig-width: 10
+#| fig-height: 4.5
+#| out-width: "70%"
+#| fig-align: center
+
+percent_100_plot
+```
+
+<div class="percent-bottom-text">
+
+**60 of 107 combinations (56.1%)** are 100% suitable under current conditions.
+
+By **RCP8.5 2100**, this falls to **38 of 107 (35.5%)**.
+
+</div>
+
+</div>
+
+## % SUITABLE HABITAT · REDISTRIBUTION
+
+<div class="percent-suitable-slide">
+
+```{r}
+#| echo: false
+#| warning: false
+#| message: false
+#| fig-width: 10
+#| fig-height: 4.5
+#| out-width: "78%"
+#| fig-align: center
+
+percent_suitable_redistribution_plot
+```
+
+<div class="percent-bottom-text">
+
+Under **RCP8.5 2100**, across 107 TURF × species combinations:
+
+**11 gain** · **38 lose** · **50 show no change** · **8 cannot be compared**
+
+Changes range from **−100 to +100 percentage points**.
+
+*All ±100 percentage-point changes occur in sub-ID 29_1 and are based on 2 HSI-valued cells.*
+
+</div>
+
+</div>
+
+
+## % SUITABLE HABITAT · WHERE DO RESPONSES OCCUR?
+
+<div class="percent-suitable-slide">
+
+```{r}
+#| echo: false
+#| warning: false
+#| message: false
+#| fig-width: 11
+#| fig-height: 5.2
+#| out-width: "88%"
+#| fig-align: center
+
+percent_suitable_direction_map
+```
+
+<div class="metric-check-takeaway">
+
+**→ Some sub-IDs have species that gain suitable habitat and species that lose suitable habitat.**
+
+</div>
+
+</div>
+
+## SPECIES RICHNESS · DATA CHECK
+
+<div class="percent-suitable-slide">
+
+### **Tau (threshold) changed from >10% to >0% suitable habitat**
+
+<br>
+
+Species is now counted whenever any suitable habitat is present.
+
+<br>
+
+**239 of 252 observations (94.8%)** are unchanged.
+
+**13 of 252 observations (5.2%)** increase by exactly **1 species**.
+
+**12 of those 13 differences involve *Panulirus argus*.**
+
+<div class="metric-check-takeaway">
+
+**→ Removing the 10% threshold has little effect on species richness.**
+
+</div>
+
+</div>
+
+## SPECIES RICHNESS · CLIMATE RESPONSE
+
+<div class="mean-hsi-attention-slide">
+
+```{r}
+#| echo: false
+#| fig-width: 11
+#| fig-height: 5.0
+#| out-width: "92%"
+#| fig-align: center
+
+richness_response_map
+```
+
+<div class="attention-takeaway">
+
+Under **RCP8.5 in 2100**, **4 of 36 sub-IDs show a modeled loss in target-species richness**.
+
+**2 additional apparent losses** occur because the future AquaX prediction becomes NA, while **2 apparent gains** involve species already targeted by the TURF that have 0% suitable habitat currently.
+
+</div>
+
+</div>
+
+## POTENTIAL REDISTRIBUTION · GAINS & LOSSES
+
+<div class="mean-hsi-na-slide">
+
+**Metric 4 tests all 20 modeled species across all 36 modeled sub-IDs, to identify potential gains from species that a TURF does not currently target.**
+
+<br>
+
+| Change under RCP8.5 2100 | Number | What it means |
+|---|---:|---|
+| **Target species lost** | **6** | Current target goes from >0% → 0% suitable |
+| **Existing target becomes suitable** | **3** | Current target goes from 0% → >0% suitable |
+| **New non-target species becomes suitable** | **0** | Species not currently targeted goes from 0% → >0% suitable |
+| **Target species becomes NA** | **2** | Future AquaX prediction becomes unavailable |
+
+<br>
+
+<div class="metric-check-takeaway">
+
+**→ Expanding the analysis to all modeled species identified no potential gains from species outside a TURF's current target list.**
+
+</div>
+
+</div>
+
+
+<style>
+
+/* -------------------------------------------------------
+
+
+   GENERAL
+------------------------------------------------------- */
+
+.reveal h2 {
+  color: #1769aa;
+  font-size: 1.25em;
+  font-weight: 700;
+  text-transform: none;
+  margin-bottom: 0.7em;
+}
+
+.blue {
+  color: #1769aa;
+}
+
+
+/* -------------------------------------------------------
+   SLIDE 1: TURF STRUCTURE
+------------------------------------------------------- */
+
+.structure-slide {
+  font-size: 0.90em;
+}
+
+.structure-columns {
+  margin-top: 0.7em;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  column-gap: 3em;
+  align-items: start;
+}
+
+.structure-column {
+  width: 100%;
+}
+
+
+/* -------------------------------------------------------
+   SLIDE 2: WHICH TURFS ARE INCLUDED?
+------------------------------------------------------- */
+
+.included-slide {
+  font-size: 0.78em;
+  line-height: 1.15;
+}
+
+.flow-row {
+  font-size: 1em;
+  margin: 0;
+}
+
+.flow-number {
+  color: #1769aa;
+  font-size: 1.35em;
+  font-weight: 700;
+}
+
+.down-arrow {
+  color: #1769aa;
+  font-size: 1.35em;
+  line-height: 1;
+  margin: 0.25em 0;
+}
+
+.flow-note {
+  color: #777;
+  font-size: 0.72em;
+  font-style: italic;
+  margin-top: 0.05em;
+}
+
+
+/* -------------------------------------------------------
+   SLIDE 3: WHY ARE SUB-IDs NOT INCLUDED?
+------------------------------------------------------- */
+
+.filter-slide {
+  font-size: 0.82em;
+}
+
+.filter-takeaway {
+  color: #1769aa;
+  font-size: 0.70em;
+  line-height: 1.2;
+  margin-top: 1em;
+}
+
+
+/* -------------------------------------------------------
+   SLIDE 4: MODELED SPECIES
+------------------------------------------------------- */
+
+.modeled-species-slide {
+  font-size: 0.88em;
+}
+
+
+/* -------------------------------------------------------
+   THREE-COLUMN SPECIES LAYOUT
+------------------------------------------------------- */
+
+.species-columns {
+  margin-top: 0.7em;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  column-gap: 2em;
+  align-items: start;
+}
+
+.species-column {
+  width: 100%;
+  padding: 0;
+  margin: 0;
+}
+
+.species-column p {
+  font-size: 0.70em;
+  line-height: 1.3;
+  margin-top: 0.15em;
+  margin-bottom: 0.15em;
+  white-space: nowrap;
+}
+
+.species-column p:has(strong) {
+  font-size: 0.88em;
+  margin-top: 0.65em;
+  margin-bottom: 0.35em;
+  line-height: 1.1;
+}
+
+.species-column p:has(strong) strong {
+  color: #1769aa;
+  font-weight: 700;
+}
+
+
+/* -------------------------------------------------------
+   SLIDE 5: MODELED TURF MAP
+------------------------------------------------------- */
+
+.map-slide {
+  font-size: 0.88em;
+}
+
+
+/* -------------------------------------------------------
+   SLIDE 6: AQUAX CELL SUPPORT
+------------------------------------------------------- */
+
+.cell-support-slide {
+  font-size: 0.56em;
+}
+
+.cell-support-intro {
+  font-size: 0.9em;
+  line-height: 1.15;
+  margin-top: 0.1em;
+  margin-bottom: 0.1em;
+}
+
+.cell-support-takeaway {
+  color: #1769aa;
+  font-size: 0.9em;
+  line-height: 1.15;
+  text-align: center;
+  margin-top: 0;
+}
+
+
+/* -------------------------------------------------------
+   SLIDE 7: AQUAX NA PATTERNS
+------------------------------------------------------- */
+
+.na-slide {
+  font-size: 0.60em;
+  line-height: 1.18;
+}
+
+.na-slide table {
+  font-size: 0.95em;
+  margin-top: 0.35em;
+  margin-bottom: 0.65em;
+}
+
+.na-slide p {
+  margin-top: 0.4em;
+  margin-bottom: 0.4em;
+}
+
+.na-takeaway {
+  color: #1769aa;
+  font-size: 0.95em;
+  line-height: 1.18;
+  margin-top: 0.6em;
+}
+
+
+/* -------------------------------------------------------
+   METRIC: MEAN HSI
+------------------------------------------------------- */
+
+.mean-hsi-na-slide {
+  font-size: 0.60em;
+  line-height: 1.15;
+}
+
+.mean-hsi-na-slide h3 {
+  font-size: 1.15em;
+  margin-top: 0.7em;
+  margin-bottom: 0.4em;
+}
+
+/* -------------------------------------------------------
+   MEAN HSI: CASES NEEDING EXTRA ATTENTION
+------------------------------------------------------- */
+
+.mean-hsi-attention-slide {
+  font-size: 0.60em;
+  line-height: 1.15;
+}
+
+.attention-map-columns {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  column-gap: 1.5em;
+  align-items: start;
+}
+
+.attention-map {
+  text-align: center;
+}
+
+.attention-map > p:first-child {
+  color: #1769aa;
+  font-size: 1.05em;
+  margin-top: 0;
+  margin-bottom: 0.15em;
+}
+
+.attention-legend {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 2em;
+  margin-top: 0.25em;
+  font-size: 0.82em;
+}
+
+.legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4em;
+}
+
+.legend-box {
+  display: inline-block;
+  width: 1.1em;
+  height: 1.1em;
+  border: 1px solid black;
+}
+
+.permanent-na {
+  background-color: #d95f5f;
+}
+
+.future-na {
+  background-color: #f0ad4e;
+}
+
+.no-issue {
+  background-color: #cccccc;
+}
+
+.attention-takeaway {
+  color: #1769aa;
+  text-align: center;
+  font-size: 0.90em;
+  margin-top: 0.65em;
+}
+
+/* -------------------------------------------------------
+   METRIC: % SUITABLE HABITAT
+------------------------------------------------------- */
+
+.percent-suitable-slide {
+  font-size: 0.60em;
+  line-height: 1.15;
+}
+
+.metric-label {
+  color: #1769aa;
+  font-size: 0.70em;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  margin-top: 0;
+  margin-bottom: 0.15em;
+}
+
+.percent-suitable-takeaway {
+  line-height: 1.15;
+  margin-top: 0.25em;
+}
+
+.metric-check-takeaway {
+  color: #1769aa;
+  font-size: 0.95em;
+  line-height: 1.18;
+  margin-top: 0.5em;
+}
+
+.percent-bottom-text {
+  font-size: 0.75em;
+  line-height: 1.15;
+  margin-top: 0.2em;
+}
+
+/* % suitable diagnostic-map legend */
+
+.zero-cells {
+  background-color: #d95f5f;
+}
+
+.one-cell {
+  background-color: #f0ad4e;
+}
+
+.two-three-cells {
+  background-color: #f6d55c;
+}
+
+.transition-cells {
+  background-color: #9b59b6;
+}
+
+</style>
