@@ -59,3 +59,10 @@ data/eez_v12.gpkg
 .RData
 data/eez_v12.gpkg
 data/raw/
+
+# Generated validation outputs
+data/processed/turf_metrics/data_validation_objects.rds
+
+# Generated Quarto slide outputs
+scripts/02_analysis/data_validation_slides.html
+scripts/02_analysis/data_validation_slides_files/
