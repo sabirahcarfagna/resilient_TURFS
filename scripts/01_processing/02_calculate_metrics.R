@@ -9,7 +9,7 @@
 # 2. Metric functions calculate, for each TURF x species x scenario:
 #    - mean HSI of suitable cells
 #    - percent of the TURF that is suitable
-#    - species presence based on the persistence threshold
+#    - species presence based on the threshold (which is now 0)
 #
 # 3. process_raster_metrics() brings these functions together and calculates
 #    the metrics for one species x scenario raster.
@@ -30,6 +30,7 @@
 library(terra)
 library(sf)
 library(dplyr)
+library(exactextractr)
 
 # FILE PATHS -------------------------------------------------------------------
 
@@ -104,18 +105,18 @@ get_species_turfs <- function(target_aphia_id) {
 }
 
 # FUNCTION: get_modeled_turf_areas --------------------------------------------
-# Creates one unique polygon for each spatial sub-ID included
-# in the existing AquaX analysis.
+# Creates one unique polygon for each of the 36 sub-ID that
+# target at least one spp for which we have SDM.
 #
-# Unlike get_species_turfs(), these polygons are NOT filtered
+# Unlike get_species_turfs(), these are NOT filtered
 # according to which species the TURF currently targets.
 #
-# These areas will later be used to evaluate every modeled
-# AquaX species inside every modeled sub-ID.
+# These areas are used to test all 20 spp for 
+# potential redistribution 
 
 get_modeled_turf_areas <- function() {
   
-  # Aphia IDs for which we actually have AquaX rasters
+  # Aphia IDs for which we have AquaX rasters
   modeled_aphia_ids <- unique(
     vapply(
       raster_files,
@@ -124,8 +125,8 @@ get_modeled_turf_areas <- function() {
     )
   )
   
-  # Identify the sub-IDs already represented in the
-  # target-species AquaX analysis
+  # find the 36 sub IDs that have at least one target species 
+  # for which we have an AquaX SDM. 
   modeled_sub_ids <- turfs |>
     st_drop_geometry() |>
     dplyr::filter(
@@ -137,7 +138,7 @@ get_modeled_turf_areas <- function() {
   # Keep one spatial geometry per modeled sub-ID.
   #
   # A sub-ID can occur on multiple rows because it can target
-  # multiple species, so we group and union its geometry.
+  # multiple species, so we group and union its geom.
   modeled_turf_areas <- turfs |>
     dplyr::filter(
       sub_id %in% modeled_sub_ids
@@ -193,16 +194,24 @@ load_matching_raster_data <- function(file) {
     crs = crs(raster)
   )
   
-  #for each TURF polygon what are the HSI values
+  #for each TURF polygon, what are the HSI values
   # of every raster cell that falls inside it
-  extracted_values <- terra::extract(
+  extracted_values <- exactextractr::exact_extract(
     raster,
-    terra::vect(species_turfs)
-  )
+    species_turfs
+  ) |>
+    dplyr::bind_rows(
+      .id = "ID"
+    ) |>
+    dplyr::mutate(
+      ID = as.integer(ID)
+    )
   
-  #give the raster-value column the same name
-  #for every scenario
-  names(extracted_values)[2] <- "hsi"
+  # Rename the raster value column to HSI
+  extracted_values <- extracted_values |>
+    dplyr::rename(
+      hsi = value
+    )
   
   #starting to create a lookup table
   turf_lookup <- species_turfs |>
@@ -245,8 +254,7 @@ load_matching_raster_data <- function(file) {
 # FUNCTION: load_all_turf_raster_data -----------------------------------------
 # Prepares one species x scenario raster for ALL modeled TURF areas,
 # regardless of whether each TURF currently targets that species.
-#
-# Allows to detect potential suitable habitat for species
+# This is to detect potential suitable habitat for species
 # that are not currently targeted by a TURF.
 
 load_all_turf_raster_data <- function(file) {
@@ -269,15 +277,24 @@ load_all_turf_raster_data <- function(file) {
     crs = crs(raster)
   )
   
-  # Extract HSI values from this species raster
-  # within every modeled TURF area
-  extracted_values <- terra::extract(
+  # Extract HSI values and the fraction of each raster cell
+  # that overlaps each modeled TURF
+  extracted_values <- exactextractr::exact_extract(
     raster,
-    terra::vect(all_turfs)
-  )
+    all_turfs
+  ) |>
+    dplyr::bind_rows(
+      .id = "ID"
+    ) |>
+    dplyr::mutate(
+      ID = as.integer(ID)
+    )
   
-  # Give raster-value column a consistent name
-  names(extracted_values)[2] <- "hsi"
+  # Rename the raster value column to HSI
+  extracted_values <- extracted_values |>
+    dplyr::rename(
+      hsi = value
+    )
   
   # Create lookup table connecting terra extraction IDs
   # back to the correct spatial sub-ID
@@ -326,27 +343,29 @@ calculate_mean_hsi <- function(extracted_values, cutoff) {
     ) |>
     dplyr::summarise(
       
-      # Number of cells with an AquaX HSI prediction
+      # Number of cells with HSI values
       n_valid_cells = sum(!is.na(hsi)),
       
-      # Mean HSI of suitable cells
+      # Mean HSI of suitable cells, weighted by the fraction
+      # of each raster cell that overlaps the TURF
       mean_hsi = {
         
         if (n_valid_cells == 0) {
           
-          # No numeric AquaX prediction is available
+          # No HSI is available
           NA_real_
           
         } else if (sum(hsi > cutoff, na.rm = TRUE) == 0) {
           
-          # AquaX predictions exist, but no cells are suitable
+          # HSI exist, but no cells are suitable
           0
           
         } else {
           
-          # At least one suitable cell exists
-          mean(
+          # Calculate the overlap-weighted mean HSI
+          weighted.mean(
             hsi[hsi > cutoff],
+            coverage_fraction[hsi > cutoff],
             na.rm = TRUE
           )
           
@@ -373,19 +392,31 @@ calculate_percent_suitable <- function(extracted_values, cutoff) {
     ) |>
     dplyr::summarise(
       
+      # Number of cells with an HSI
       n_valid_cells = sum(!is.na(hsi)),
       
+      # Percent suitable habitat, weighted by the fraction
+      # of each raster cell that overlaps the TURF
       percent_suitable = {
         
         if (n_valid_cells == 0) {
           
+          # No HSI is available
           NA_real_
           
         } else {
           
+          # Calculate suitable covered area as a percentage
+          # of the total covered area with valid HSI values
           100 *
-            sum(hsi > cutoff, na.rm = TRUE) /
-            n_valid_cells
+            sum(
+              coverage_fraction[hsi > cutoff],
+              na.rm = TRUE
+            ) /
+            sum(
+              coverage_fraction[!is.na(hsi)],
+              na.rm = TRUE
+            )
           
         }
         
@@ -548,13 +579,15 @@ potential_metrics_combined <- dplyr::bind_rows(
 
 # SAVE OUTPUT TABLES ----------------------------------------------------------
 
+# Save exact extraction metrics separately
+# so we can compare them with the old results
 readr::write_csv(
   all_metrics_combined,
-  "data/processed/turf_metrics/turf_species_metrics.csv"
+  "data/processed/turf_metrics/turf_species_metrics_exact.csv"
 )
 
+# Save exact extraction richness separately too
 readr::write_csv(
   species_richness,
-  "data/processed/turf_metrics/turf_species_richness.csv"
+  "data/processed/turf_metrics/turf_species_richness_exact.csv"
 )
-

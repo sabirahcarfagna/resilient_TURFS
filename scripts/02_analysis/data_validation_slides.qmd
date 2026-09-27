@@ -100,7 +100,7 @@ MX_C_007 → **20 sub-IDs**
 
 ::::::: filter-slide
 
-Of the **198 sub-IDs with identified species**, only **36** contain a species with one of our processed SDMs.
+Of the **198 sub-IDs with identified species**, only **36** contain a species with a processed SDMs.
 
 :::::: species-columns
 
@@ -236,7 +236,7 @@ Of these, **52 observations (6.9%)** have **only NA-valued cells**.
 </div>
 
 ::::::
-## what did we find about AquaX NAs?
+## AquaX NAs?
 
 :::::: na-slide
 
@@ -286,7 +286,7 @@ Same number of NA cells across **all scenarios and time periods**
 
 <div class="metric-check-takeaway">
 
-**→ We need to distinguish absence of suitable habitat (0) from absence of an AquaX prediction (NA).**
+**→ Need to distinguish absence of suitable habitat (0) from absence of an AquaX prediction (NA).**
 
 </div>
 
@@ -651,7 +651,7 @@ Under **RCP8.5 in 2100**, **4 of 36 sub-IDs show a modeled loss in target-specie
 **Metric 4 tests all 20 modeled species across all 36 modeled sub-IDs, to identify potential gains from species that a TURF does not currently target.**
 
 <br>
-
+        
 | Change under RCP8.5 2100 | Number | What it means |
 |---|---:|---|
 | **Target species lost** | **6** | Current target goes from >0% → 0% suitable |

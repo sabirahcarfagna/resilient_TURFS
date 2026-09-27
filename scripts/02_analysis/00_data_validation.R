@@ -67,7 +67,7 @@ raster_files <- list.files(
 
 # 1. DATA INVENTORY -----------------------------------------------------------
 
-# Summarize the basic structure of the datasets used in the analysis
+# Summarize the structure of the datasets used in the analysis
 data_inventory <- tibble::tibble(
   dataset_component = c(
     "Records in cleaned TURF dataset",
@@ -81,7 +81,7 @@ data_inventory <- tibble::tibble(
   n = c(
     nrow(turfs),
     
-    # Count unique non-missing TURF IDs
+    # Count the unique non-missing TURF IDs
     dplyr::n_distinct(
       turfs$turf_id,
       na.rm = TRUE
@@ -238,7 +238,7 @@ sub_id_species_summary <- modeled_combinations |>
 sub_id_species_summary
 
 
-# Summarize geographic representation of the modeled sample
+# Summarize Turfs and species by state
 aquax_state_summary <- modeled_combinations |>
   group_by(state) |>
   summarise(
@@ -256,7 +256,7 @@ aquax_state_summary <- modeled_combinations |>
 
 aquax_state_summary
 
-# Map the geographic distribution of the modeled sub-IDs ----------------------
+# Map the distribution of the modeled sub-IDs ----------------------
 
 # Keep one spatial geometry for each of the 36 modeled sub-IDs
 # and transform to longitude/latitude for mapping
@@ -273,7 +273,7 @@ modeled_turfs_map <- turfs |>
   )
 
 
-# Create a faint outline of Mexico for geographic context
+# Create outline of Mex for
 mexico_map <- ggplot2::map_data(
   "world"
 ) |>
