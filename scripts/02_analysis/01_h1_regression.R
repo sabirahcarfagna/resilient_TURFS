@@ -4,104 +4,114 @@
 
 library(dplyr)
 library(tidyr)
+library(fixest)
+library(sf)
 
 # LOAD DATA -------------------------------------------------------------------
 
-#turf_metrics will read CSV file into R
 turf_metrics <- readr::read_csv(
-  "data/processed/turf_metrics/turf_species_metrics.csv",
+  "data/processed/turf_metrics/turf_species_metrics_exact.csv",
   show_col_types = FALSE
 )
 
-# EXTRACT TIME PERIOD FROM SCENARIO ----------------------------------------------------
+richness <- readr::read_csv(
+  "data/processed/turf_metrics/turf_species_richness.csv",
+  show_col_types = FALSE
+)
 
-#H1 cares about projection period not emissions severity 
-#adds new column called period 
+# TURF COORDS FOR CONLEY STANDARD ERRORS --------------------------------
 
-# turf_metrics <- turf_metrics %>% 
-#   mutate( #create "period" column
-#     period = case_when( 
-#       #if scenario equals "current" then put "current" in the new period column 
-#       scenario == "current" ~ "current",
-#       #for each row look in the scenario coln, if it contains 2050 then assign to period
-#       grepl("2050", scenario) ~ "2050",
-#       grepl("2100", scenario) ~ "2100"
-#     )
-#   )
-# 
-# # SET CURRENT AS REFERENCE PERIOD ---------------------------------------------
-# 
-# turf_metrics$period <- relevel(
-#   factor(turf_metrics$period), #treat period as categorical variable
-#   ref = "current" #set current as the reference category
-#   
-# )
+turfs <- st_read("data/turfs/mex_turfs_combined.gpkg")
 
-# RESHAPE MEAN HSI FOR CHANGE CALCULATION -------------------------------------
-
-# Current structure:
-# sub_id   scenario       mean_hsi
-# A        current        0.80
-# A        rcp26_2050     0.75
-# A        rcp26_2100     0.70
-#
-# Reshape it so the scenarios become separate cols:
-# sub_id   current   rcp26_2050   rcp26_2100
-# A        0.80      0.75          0.70
-
-# Reshape mean HSI so each scenario has its own column
-hsi_change <- turf_metrics |>
-  select(sub_id, turf_id, aphia_id, scenario, mean_hsi) |>
-  pivot_wider(
-    names_from = scenario, #take values inside scenario col and turn into new cols names 
-    values_from = mean_hsi #and fill them with HSI values
-  )
-
-# CALCULATE CHANGE IN MEAN HSI ------------------------------------------------
-
-hsi_change <- hsi_change %>%
+turf_coords <- turfs %>%
+  select(sub_id) %>%
+  st_transform(6933) %>%
+  group_by(sub_id) %>%
+  summarise() %>%
+  st_point_on_surface() %>%
+  st_transform(4326) %>%
   mutate(
-    delta_rcp26_2050 = rcp26_2050 - current,
-    delta_rcp26_2100 = rcp26_2100 - current,
-    
-    delta_rcp45_2050 = rcp45_2050 - current,
-    delta_rcp45_2100 = rcp45_2100 - current,
-    
-    delta_rcp85_2050 = rcp85_2050 - current,
-    delta_rcp85_2100 = rcp85_2100 - current
-  )
+    longitude = st_coordinates(.)[, 1],
+    latitude  = st_coordinates(.)[, 2]
+  ) %>%
+  st_drop_geometry()
 
-# RESHAPE HSI CHANGE FOR REGRESSION -------------------------------------------
+# PREPARE H1 REGRESSION DATA ------------------------------------------------
 
-# Current structure:
-# sub_id   delta_rcp26_2050   delta_rcp26_2100
-# A             -8.76               -6.40
-#
-# Reshape it so each delta becomes its own row:
-# sub_id   projection          delta_hsi
-# A        delta_rcp26_2050      -8.76
-# A        delta_rcp26_2100      -6.40
+# Calculate changes relative to current conditions and reshape for regression
 
-hsi_regression <- hsi_change %>%
-  # turn the six delta columns into rows
+h1_regression <- turf_metrics %>%
+  group_by(sub_id, aphia_id) %>%
+  mutate(
+    delta_hsi = mean_hsi - mean_hsi[scenario == "current"],
+    delta_percent = percent_suitable - percent_suitable[scenario == "current"]
+  ) %>%
+  filter(scenario != "current") %>%
   pivot_longer(
-    cols = starts_with("delta_"),#put old delta column names into a new column called "projection"
-    names_to = "projection", #put delta HSI into a new column called "delta_hsi"
-    values_to = "delta_hsi"
-  )
+    cols = c(delta_hsi, delta_percent),
+    names_to = "metric",
+    values_to = "change"
+  ) %>%
+  mutate(
+    metric = sub("delta_", "", metric),
+    period = factor(sub(".*_", "", scenario)),
+    rcp = sub("_.*", "", scenario)
+  ) %>%
+  left_join(turf_coords, by = "sub_id") %>%
+  ungroup()
 
-# EXTRACT RCP AND PROJECTION PERIOD -------------------------------------------
+# MEAN HSI REGRESSION -------------------------------------------------------
 
-#separate at each _ and put those pieces into three coloumns 
+hsi_regression <- h1_regression %>%
+  filter(metric == "hsi")
 
-hsi_regression <- hsi_regression %>%
-  separate(
-    projection,
-    into = c("delta", "rcp", "period"),
-    sep = "_"
-  )
+hsi_model <- feols(
+  change ~ 0 + period,
+  data = hsi_regression,
+  vcov = conley(100) ~ latitude + longitude
+)
 
-# REMOVE UNNECESSARY DELTA LABEL COLUMN ---------------------------------------
+summary(hsi_model)
+confint(hsi_model)
 
-hsi_regression <- hsi_regression %>%
-  select(-delta)
+# PERCENT SUITABLE HABITAT REGRESSION ---------------------------------------
+
+percent_regression <- h1_regression %>%
+  filter(metric == "percent")
+
+percent_model <- feols(
+  change ~ 0 + period,
+  data = percent_regression,
+  vcov = conley(100) ~ latitude + longitude
+)
+
+summary(percent_model)
+confint(percent_model)
+
+# SPECIES RICHNESS REGRESSION -----------------------------------------------
+
+# Calculate changes relative to current richness and prepare regression data
+
+richness_regression <- richness %>%
+  group_by(sub_id) %>%
+  mutate(
+    change = species_richness - species_richness[scenario == "current"]
+  ) %>%
+  filter(scenario != "current") %>%
+  mutate(
+    period = factor(sub(".*_", "", scenario)),
+    rcp = sub("_.*", "", scenario)
+  ) %>%
+  left_join(turf_coords, by = "sub_id") %>%
+  ungroup()
+
+# Regression with Conley spatial standard errors
+
+richness_model <- feols(
+  change ~ 0 + period,
+  data = richness_regression,
+  vcov = conley(100) ~ latitude + longitude
+)
+
+summary(richness_model)
+confint(richness_model)
