@@ -115,3 +115,33 @@ richness_model <- feols(
 
 summary(richness_model)
 confint(richness_model)
+
+# H1 REGRESSION RESULTS TABLE -----------------------------------------------
+# (here I promted AI "write a function that combines the results of all
+# 3 regression models into 1 summary table, including estimates,
+# SEs, CIs, p vals, and sample sizes)
+
+tidy_h1 <- function(model, metric) {
+  ci <- confint(model)
+  ct <- summary(model)$coeftable
+  
+  data.frame(
+    Metric = metric,
+    Period = names(coef(model)),
+    Estimate = unname(coef(model)),
+    SE = ct[, "Std. Error"],
+    CI_lower = ci[, 1],
+    CI_upper = ci[, 2],
+    p_value = ct[, "Pr(>|t|)"],
+    N = nobs(model),
+    row.names = NULL
+  )
+}
+
+h1_results <- bind_rows(
+  tidy_h1(hsi_model, "Mean HSI"),
+  tidy_h1(percent_model, "Percent suitable"),
+  tidy_h1(richness_model, "Species richness")
+)
+
+View(h1_results)
