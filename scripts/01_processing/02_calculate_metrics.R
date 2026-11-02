@@ -50,6 +50,10 @@ metrics_output_file <- "data/processed/turf_metrics.csv"
 # Load  cleaned TURF polygons and species info
 turfs <- st_read(turf_file)
 
+# Exclude 4 estuarine Eastern Oyster TURFs in Ver
+turfs <- turfs |>
+  filter(!sub_id %in% c("193_1", "203_1", "205_1", "209_1"))
+
 # Load species-specific AquaX HSI cutoffs
 species_cutoffs <- readr::read_csv(
   cutoff_file,
@@ -333,7 +337,7 @@ load_all_turf_raster_data <- function(file) {
 
 # FUNCTION: calculate_mean_hsi -----------------------------------------------
 
-calculate_mean_hsi <- function(extracted_values, cutoff) {
+calculate_mean_hsi <- function(extracted_values) {
   
   extracted_values |>
     dplyr::group_by(
@@ -355,17 +359,13 @@ calculate_mean_hsi <- function(extracted_values, cutoff) {
           # No HSI is available
           NA_real_
           
-        } else if (sum(hsi > cutoff, na.rm = TRUE) == 0) {
-          
-          # HSI exist, but no cells are suitable
-          0
-          
         } else {
           
-          # Calculate the overlap-weighted mean HSI
+          # Mean HSI across all valid cells within the TURF,
+          # weighted by the fraction of each cell overlapping the TURF
           weighted.mean(
-            hsi[hsi > cutoff],
-            coverage_fraction[hsi > cutoff],
+            hsi,
+            coverage_fraction,
             na.rm = TRUE
           )
           

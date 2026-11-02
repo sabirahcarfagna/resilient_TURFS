@@ -1,7 +1,8 @@
 # BUILD AQUAX RASTERS -----------------------------------------------------------
 
 # Goal:
-# Convert AquaX SDM tables into GeoTIFF rasters cropped to Mexico's EEZ.
+# Convert AquaX SDM tables into GeoTIFF rasters covering the selected
+# Latin American EEZs, including Mexico, Central America, and South America.
 
 # PACKAGES ---------------------------------------------------------------------
 
@@ -21,23 +22,40 @@ mexico_eez_file <- "data/eez_v12.gpkg"
 raster_output_folder <- "data/processed/sdm_rasters"
 
 cutoff_output_file <- "data/processed/sdm_cutoffs.csv"
-# LOAD MEXICO EEZ --------------------------------------------------------------
 
-#GOAL:
-#load global EEZ polygon then only keep mexico
+# LOAD STUDY AREA EEZS ---------------------------------------------------------
 
-#read EEZ layer from geopackage file 
 all_eez <- st_read(
   mexico_eez_file,
   layer = "eez_v12"
 )
 
-#keep only mexico layers
-mexico_eez <- all_eez |>
+countries <- c(
+  "Mexico",
+  "Belize",
+  "Guatemala",
+  "El Salvador",
+  "Honduras",
+  "Nicaragua",
+  "Costa Rica",
+  "Panama",
+  "Colombia",
+  "Venezuela",
+  "Guyana",
+  "Suriname",
+  "Brazil",
+  "Ecuador",
+  "Peru",
+  "Chile",
+  "Argentina",
+  "Uruguay"
+)
+
+study_eez <- all_eez |>
   dplyr::filter(
-    SOVEREIGN1 == "Mexico" |
-      SOVEREIGN2 == "Mexico" |
-      SOVEREIGN3 == "Mexico"
+    SOVEREIGN1 %in% countries |
+      SOVEREIGN2 %in% countries |
+      SOVEREIGN3 %in% countries
   )
 
 # LIST SDM FILES ---------------------------------------------------------------
@@ -103,20 +121,17 @@ build_scenario_raster <- function(sdm, scenario) {
 }
 
 # FUNCTION: crop_to_eez --------------------------------------------------------
-
 crop_to_eez <- function(raster, eez) {
   
   eez_vector <- vect(eez)
   
   cropped_raster <- crop(
     raster,
-    eez_vector,
-    extend = TRUE #added extend = T
+    eez_vector
   )
   
   return(cropped_raster)
-  
-} #removed mask
+}
 
 # FUNCTION: save_scenario_raster -----------------------------------------------
 
@@ -162,9 +177,9 @@ process_species <- function(file) {
       scenario
     )
     
-    mexico_raster <- crop_to_eez( #crop to mexico eez
+    study_raster <- crop_to_eez( #crop to eez's
       scenario_raster,
-      mexico_eez
+      study_eez
     )
     
     filename <- paste0( #build file name with aphia and scenario 
@@ -175,7 +190,7 @@ process_species <- function(file) {
     )
     
     save_scenario_raster(
-      mexico_raster,
+      study_raster,
       filename
     )
     
