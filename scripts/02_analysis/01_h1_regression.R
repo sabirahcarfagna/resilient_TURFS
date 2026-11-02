@@ -20,15 +20,18 @@ richness <- readr::read_csv(
 )
 
 # TURF COORDS FOR CONLEY STANDARD ERRORS --------------------------------
+# Conley SE's need spatial data of turfs (lon/lat) 
+#to account for spatial correlation
 
+#read turf polygons
 turfs <- st_read("data/turfs/mex_turfs_combined.gpkg")
 
 turf_coords <- turfs %>%
-  select(sub_id) %>%
+  select(sub_id) %>% 
   st_transform(6933) %>%
   group_by(sub_id) %>%
-  summarise() %>%
-  st_point_on_surface() %>%
+  summarise() %>% 
+  st_point_on_surface() %>% 
   st_transform(4326) %>%
   mutate(
     longitude = st_coordinates(.)[, 1],
@@ -117,31 +120,17 @@ summary(richness_model)
 confint(richness_model)
 
 # H1 REGRESSION RESULTS TABLE -----------------------------------------------
-# (here I promted AI "write a function that combines the results of all
-# 3 regression models into 1 summary table, including estimates,
-# SEs, CIs, p vals, and sample sizes)
+#using broom tidy
 
-tidy_h1 <- function(model, metric) {
-  ci <- confint(model)
-  ct <- summary(model)$coeftable
-  
-  data.frame(
-    Metric = metric,
-    Period = names(coef(model)),
-    Estimate = unname(coef(model)),
-    SE = ct[, "Std. Error"],
-    CI_lower = ci[, 1],
-    CI_upper = ci[, 2],
-    p_value = ct[, "Pr(>|t|)"],
-    N = nobs(model),
-    row.names = NULL
-  )
-}
+h1_results <- dplyr::bind_rows(
+broom::tidy(hsi_model, conf.int = TRUE) |>
+  dplyr::mutate(Metric = "Mean HSI", N = nobs(hsi_model)),
 
-h1_results <- bind_rows(
-  tidy_h1(hsi_model, "Mean HSI"),
-  tidy_h1(percent_model, "Percent suitable"),
-  tidy_h1(richness_model, "Species richness")
+broom::tidy(percent_model, conf.int = TRUE) |>
+  dplyr::mutate(Metric = "Percent suitable", N = nobs(percent_model)),
+
+broom::tidy(richness_model, conf.int = TRUE) |>
+  dplyr::mutate(Metric = "Species richness", N = nobs(richness_model))
 )
 
 View(h1_results)

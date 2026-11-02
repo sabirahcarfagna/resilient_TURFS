@@ -117,29 +117,16 @@ summary(richness_h2_model)
 confint(richness_h2_model)
 
 # H2 REGRESSION RESULTS TABLE -----------------------------------------------
-#AI promted 
 
-tidy_h2 <- function(model, metric) {
-  ci <- confint(model)
-  ct <- summary(model)$coeftable
+h2_results <- dplyr::bind_rows(
+  broom::tidy(hsi_h2_model, conf.int = TRUE) |>
+    dplyr::mutate(Metric = "Mean HSI", N = nobs(hsi_h2_model)),
   
-  data.frame(
-    Metric = metric,
-    Coefficient = names(coef(model)),
-    Estimate = unname(coef(model)),
-    SE = ct[, "Std. Error"],
-    CI_lower = ci[, 1],
-    CI_upper = ci[, 2],
-    p_value = ct[, "Pr(>|t|)"],
-    N = nobs(model),
-    row.names = NULL
-  )
-}
-
-h2_results <- bind_rows(
-  tidy_h2(hsi_h2_model, "Mean HSI"),
-  tidy_h2(percent_h2_model, "Percent suitable"),
-  tidy_h2(richness_h2_model, "Species richness")
+  broom::tidy(percent_h2_model, conf.int = TRUE) |>
+    dplyr::mutate(Metric = "Percent suitable", N = nobs(percent_h2_model)),
+  
+  broom::tidy(richness_h2_model, conf.int = TRUE) |>
+    dplyr::mutate(Metric = "Species richness", N = nobs(richness_h2_model))
 )
 
 View(h2_results)
